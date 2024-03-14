@@ -1,3 +1,8 @@
+use std::{
+    fs,
+    io::Result
+};
+
 use crate::{
     hinter::get_first_token,
     history::SearchQuery,
@@ -66,6 +71,16 @@ impl Hinter for CwdAwareHinter {
             String::new()
         };
 
+        if self.current_hint.is_empty() {
+            self.current_hint = if line.chars().count() >= self.min_chars {
+                cwd_file_hint(line)
+                    .unwrap_or_default()
+            }
+            else {
+                String::new()
+            };
+        }
+
         if use_ansi_coloring && !self.current_hint.is_empty() {
             self.style.paint(&self.current_hint).to_string()
         } else {
@@ -106,4 +121,21 @@ impl CwdAwareHinter {
         self.min_chars = min_chars;
         self
     }
+}
+
+fn cwd_file_hint(line: &str) -> Option<String> {
+    let last_token = line
+        .split_ascii_whitespace()
+        .last()?;
+    let cwd = std::env::current_dir().ok()?;
+    let cwd_files = fs::read_dir(cwd).ok()?;
+    let entry = cwd_files
+        .filter_map(Result::ok)
+        .filter_map(|dir_entry| { dir_entry.file_name().into_string().ok() })
+        .find(|file_name| {
+            file_name.starts_with(last_token)
+        })?;
+    let entry = entry.strip_prefix(last_token)?;
+    
+    Some(String::from(entry))
 }
